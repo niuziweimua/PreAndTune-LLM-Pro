@@ -67,4 +67,5 @@ if __name__ == '__main__':
             outputs = generator([prompt_no_input.format_map(prompt)], max_new_tokens=200, num_beams=4, pad_token_id=tokenizer.eos_token_id)
         else:
             outputs = generator([prompt_no_input.format_map(prompt)], max_new_tokens=200, num_beams=4)
-        print('# bot: \n', outputs[0][0]['generated_text'][len(pro
+        print('# bot: \n', outputs[0][0]['generated_text'][len(prompt_no_input.format_map(prompt)):].strip())
+
