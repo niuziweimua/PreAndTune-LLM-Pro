@@ -102,4 +102,83 @@ def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedToken
             labels.append(instance_ids[i : i + max_length])
             if len(instance_ids[i : i + max_length]) < max_length:
                 print('Warning: len(instance_ids[i : i + max_length]) < max_length')
-                logging.warning(f"len(instance_
+                logging.warning(f"len(instance_ids[i : i + max_length]) < max_length: {len(instance_ids[i : i + max_length])} < {max_length}")
+
+    return dict(
+        input_ids=input_ids,
+        labels=labels,
+    )
+
+
+def preprocess(
+    examples: Sequence[str],
+    tokenizer: transformers.PreTrainedTokenizer,
+) -> Dict:
+    """Preprocess the data by tokenizing."""
+    examples_tokenized = _tokenize_fn(examples, tokenizer)
+    input_ids = examples_tokenized["input_ids"]
+    print('block num', len(input_ids))
+    print(input_ids[0].shape, input_ids[1].shape)
+    # count all lengths
+    cnt = sum([input_id.shape[0] for input_id in input_ids])
+    print('# of tokens', cnt)
+    labels = copy.deepcopy(input_ids)
+    return dict(input_ids=input_ids, labels=labels)
+
+
+class PretrainDataset(Dataset):
+    """Dataset for pretraining."""
+
+    def __init__(self, data_path: str, tokenizer: transformers.PreTrainedTokenizer):
+        super(PretrainDataset, self).__init__()
+        logging.warning("Loading data...")
+        raw_data = RawPretrainDataset(data_path=data_path, tokenizer=tokenizer)
+        files_ls = raw_data.files_ls
+
+        logging.warning("Tokenizing inputs... This may take some time...")
+        data_dict = preprocess(files_ls, tokenizer)
+
+        self.input_ids = data_dict["input_ids"]
+        self.labels = data_dict["labels"]
+
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, i) -> Dict[str, torch.Tensor]:
+        return dict(input_ids=self.input_ids[i], labels=self.labels[i])
+
+
+@dataclass
+class DataCollatorForPretrainDataset(object):
+    """Collate examples for pretraining."""
+
+    tokenizer: transformers.PreTrainedTokenizer
+
+    def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
+        input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
+        )
+        labels = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=IGNORE_INDEX)
+        return dict(
+            input_ids=input_ids,
+            labels=labels,
+            attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
+        )
+
+
+def make_pretrain_data_module(tokenizer: transformers.PreTrainedTokenizer, data_args) -> Dict:
+    """Make dataset and collator for pretraining."""
+    train_dataset = PretrainDataset(tokenizer=tokenizer, data_path=data_args.data_path)
+    data_collator = DataCollatorForPretrainDataset(tokenizer=tokenizer)
+    return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator)
+
+
+def train():
+    parser = transformers.HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
+    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        model_args.model_name_or_path,
+        trust_remote_code=True, 
+        cache_dir=tra
