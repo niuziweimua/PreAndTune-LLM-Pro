@@ -223,4 +223,47 @@ To recover the original Alpaca-7B weights, follow these steps:
 2. Make sure you cloned the released weight diff into your local machine. The weight diff is located at:
     https://huggingface.co/tatsu-lab/alpaca-7b/tree/main
 3. Run this function with the correct paths. E.g.,
-    python weight_diff.py recover --path_raw <path_to_step_1_dir> --path_diff <pa
+    python weight_diff.py recover --path_raw <path_to_step_1_dir> --path_diff <path_to_step_2_dir> --path_tuned <path_to_store_recovered_weights>
+```
+
+Once step 3 completes, you should have a directory with the recovered weights, from which you can load the model like the following
+
+```python
+import transformers
+alpaca_model = transformers.AutoModelForCausalLM.from_pretrained("<path_to_store_recovered_weights>")
+alpaca_tokenizer = transformers.AutoTokenizer.from_pretrained("<path_to_store_recovered_weights>")
+```
+
+### Authors
+
+All grad students below contributed equally and the order is determined by random draw.
+
+- [Rohan Taori](https://www.rohantaori.com/)
+- [Ishaan Gulrajani](https://ishaan.io/)
+- [Tianyi Zhang](https://tiiiger.github.io/)
+- [Yann Dubois](https://yanndubs.github.io/)
+- [Xuechen Li](https://www.lxuechen.com/)
+
+All advised by [Tatsunori B. Hashimoto](https://thashim.github.io/). Yann is also advised by [Percy Liang](https://cs.stanford.edu/~pliang/) and Xuechen is also advised by [Carlos Guestrin](https://guestrin.su.domains/).
+
+### Citation
+
+Please cite the repo if you use the data or code in this repo.
+
+```
+@misc{alpaca,
+  author = {Rohan Taori and Ishaan Gulrajani and Tianyi Zhang and Yann Dubois and Xuechen Li and Carlos Guestrin and Percy Liang and Tatsunori B. Hashimoto },
+  title = {Stanford Alpaca: An Instruction-following LLaMA model},
+  year = {2023},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/tatsu-lab/stanford_alpaca}},
+}
+```
+
+Naturally, you should also cite the original LLaMA paper [1] and the Self-Instruct paper [2].
+
+### Acknowledgements
+
+We thank Yizhong Wang for his help in explaining the data generation pipeline in Self-Instruct and providing the code for the parse analysis plot.
+We thank Yifan Mai for helpful support, and members of the Stanford NLP Group as well as the Center for Research on Foundation Models (CRFM) for their helpful feedback.
