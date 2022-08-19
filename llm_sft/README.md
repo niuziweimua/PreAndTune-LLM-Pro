@@ -97,4 +97,76 @@ We built on the data generation pipeline from [self-instruct](https://github.com
 - We simplified the data generation pipeline by discarding the difference between classification and non-classification instructions.
 - We only generated a single instance for each instruction, instead of 2 to 3 instances as in [1].
 
-This produced an instruction-following dataset with 52K examples obtained at a much lower cost 
+This produced an instruction-following dataset with 52K examples obtained at a much lower cost (less than $500).
+In a preliminary study, we also find our 52K generated data to be much more diverse than the data released by [self-instruct](https://github.com/yizhongw/self-instruct/blob/main/data/seed_tasks.jsonl).
+We plot the below figure (in the style of Figure 2 in the [self-instruct paper](https://arxiv.org/abs/2212.10560) to demonstrate the diversity of our data.
+The inner circle of the plot represents the root verb of the instructions, and the outer circle represents the direct objects.
+
+[//]: # (![parse_analysis]&#40;assert/parse_analysis.png | width=100&#41;)
+[<img src="assets/parse_analysis.png" width="750" />](./assets/parse_analysis.png)
+
+## Fine-tuning
+
+We fine-tune our models using standard Hugging Face training code.
+We fine-tune LLaMA-7B and LLaMA-13B with the following hyperparameters:
+
+| Hyperparameter | LLaMA-7B | LLaMA-13B |
+|----------------|----------|-----------|
+| Batch size     | 128      | 128       |
+| Learning rate  | 2e-5     | 1e-5      |
+| Epochs         | 3        | 5         |
+| Max length     | 512      | 512       |
+| Weight decay   | 0        | 0         |
+
+To reproduce our fine-tuning runs for LLaMA, first install the requirements
+
+```bash
+pip install -r requirements.txt
+```
+
+Below is a command that fine-tunes LLaMA-7B with our dataset on a machine with 4 A100 80G GPUs in FSDP `full_shard` mode.
+We were able to reproduce a model of similar quality as the one we hosted in our demo with the following command using **Python 3.10**.
+Replace `<your_random_port>` with a port of your own, `<your_path_to_hf_converted_llama_ckpt_and_tokenizer>` with the
+path to your converted checkpoint and tokenizer (following instructions in the PR), and `<your_output_dir>` with where you want to store your outputs.
+
+```bash
+torchrun --nproc_per_node=4 --master_port=<your_random_port> train.py \
+    --model_name_or_path <your_path_to_hf_converted_llama_ckpt_and_tokenizer> \
+    --data_path ./alpaca_data.json \
+    --bf16 True \
+    --output_dir <your_output_dir> \
+    --num_train_epochs 3 \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 4 \
+    --gradient_accumulation_steps 8 \
+    --evaluation_strategy "no" \
+    --save_strategy "steps" \
+    --save_steps 2000 \
+    --save_total_limit 1 \
+    --learning_rate 2e-5 \
+    --weight_decay 0. \
+    --warmup_ratio 0.03 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --fsdp "full_shard auto_wrap" \
+    --fsdp_transformer_layer_cls_to_wrap 'LlamaDecoderLayer' \
+    --tf32 True
+```
+
+The same script also works for OPT fine-tuning. Here's an example for fine-tuning OPT-6.7B
+
+```bash
+torchrun --nproc_per_node=4 --master_port=<your_random_port> train.py \
+    --model_name_or_path "facebook/opt-6.7b" \
+    --data_path ./alpaca_data.json \
+    --bf16 True \
+    --output_dir <your_output_dir> \
+    --num_train_epochs 3 \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 4 \
+    --gradient_accumulation_steps 8 \
+    --evaluation_strategy "no" \
+    --save_strategy "steps" \
+    --save_steps 2000 \
+    --save_total_limit 1 \
+   
