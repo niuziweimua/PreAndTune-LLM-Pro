@@ -169,4 +169,58 @@ torchrun --nproc_per_node=4 --master_port=<your_random_port> train.py \
     --save_strategy "steps" \
     --save_steps 2000 \
     --save_total_limit 1 \
-   
+    --learning_rate 2e-5 \
+    --weight_decay 0. \
+    --warmup_ratio 0.03 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --fsdp "full_shard auto_wrap" \
+    --fsdp_transformer_layer_cls_to_wrap 'OPTDecoderLayer' \
+    --tf32 True
+```
+
+Note the given training script is meant to be simple and easy to use, and is not particularly optimized.
+To run on more gpus, you may prefer to turn down `gradient_accumulation_steps` to keep a global batch size of 128. Global batch size has not been tested for optimality.
+
+### Addressing OOM
+
+Naively, fine-tuning a 7B model requires about 7 x 4 x 4 = 112 GB of VRAM. Commands given above enable parameter sharding, so no redundant model copy is stored on any GPU.
+If you'd like to further reduce the memory footprint, here are some options:
+
+- Turn on CPU offload for FSDP with `--fsdp "full_shard auto_wrap offload"`. This saves VRAM at the cost of longer runtime.
+- In our experience, DeepSpeed stage-3 (with offload) can at times be more memory efficient than FSDP with offload. Here's an example to use DeepSpeed stage-3 with 4 GPUs with both parameter and optimizer offload:
+    ```bash
+    pip install deepspeed
+    torchrun --nproc_per_node=4 --master_port=<your_random_port> train.py \
+        --model_name_or_path <your_path_to_hf_converted_llama_ckpt_and_tokenizer> \
+        --data_path ./alpaca_data.json \
+        --bf16 True \
+        --output_dir <your_output_dir> \
+        --num_train_epochs 3 \
+        --per_device_train_batch_size 4 \
+        --per_device_eval_batch_size 4 \
+        --gradient_accumulation_steps 8 \
+        --evaluation_strategy "no" \
+        --save_strategy "steps" \
+        --save_steps 2000 \
+        --save_total_limit 1 \
+        --learning_rate 2e-5 \
+        --weight_decay 0. \
+        --warmup_ratio 0.03 \
+        --deepspeed "./configs/default_offload_opt_param.json" \
+        --tf32 True
+    ```
+  - The DeepSpeed library also provides some [helpful functions](https://deepspeed.readthedocs.io/en/latest/memory.html) to estimate memory usage. 
+- [LoRA](https://arxiv.org/abs/2106.09685) fine-tunes low-rank slices of the query, key, and value embedding heads. This can reduce the total memory footprint from 112GB to about 7x4=28GB. We may release our re-implemention of this in the future, but for now the [peft](https://github.com/huggingface/peft) codebase can be a useful resource.
+
+## Recovering Alpaca Weights
+
+The weight diff between Alpaca-7B and LLaMA-7B is located [here](https://huggingface.co/tatsu-lab/alpaca-7b-wdiff/tree/main).
+To recover the original Alpaca-7B weights, follow these steps:
+```text
+1. Convert Meta's released weights into huggingface format. Follow this guide:
+    https://huggingface.co/docs/transformers/main/model_doc/llama
+2. Make sure you cloned the released weight diff into your local machine. The weight diff is located at:
+    https://huggingface.co/tatsu-lab/alpaca-7b/tree/main
+3. Run this function with the correct paths. E.g.,
+    python weight_diff.py recover --path_raw <path_to_step_1_dir> --path_diff <pa
