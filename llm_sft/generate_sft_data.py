@@ -73,4 +73,30 @@ class RawSupervisedDataset(Dataset):
                     for item in sft_data[task]:
                         multi_tasks_source_data.append(prompt_no_input.format_map(item))
                         multi_tasks_target_data.append(f"{item['output']}{tokenizer.eos_token}")
-        print('multi_tasks_source_data length: ', len(mu
+        print('multi_tasks_source_data length: ', len(multi_tasks_source_data))
+        logging.warning("multi_tasks_source_data length: " + str(len(multi_tasks_source_data)))
+
+        # load alpaca data
+        alpaca_data = utils.jload(data_path + '/alpaca_data.json')
+        source_alpaca_data = [prompt_input.format_map(item) if item.get("input", "") != "" else prompt_no_input.format_map(item) for item in alpaca_data]
+        target_alpaca_data = [f"{item['output']}{tokenizer.eos_token}" for item in alpaca_data]
+        print('alpaca_data length: ', len(source_alpaca_data))
+        logging.warning("alpaca_data length: " + str(len(source_alpaca_data)))
+
+        logging.warning("Loading data finished.")
+
+        source_all = multi_tasks_source_data + source_alpaca_data
+        target_all = multi_tasks_target_data + target_alpaca_data
+
+        # shuffle data
+        random_index = random.sample(range(len(source_all)), len(source_all))
+        self.source_all = [source_all[i] for i in random_index]
+        self.target_all = [target_all[i] for i in random_index]
+
+        print('source_all length: ', len(source_all))
+        logging.warning("source_all length: " + str(len(source_all)))
+
+
+# main
+if __name__ == "__main__":
+    raw_dataset = RawSupervisedDataset(data_path='data', tokenizer=transformers.GPT2Tokenizer.from_pretrained('gpt2'))
